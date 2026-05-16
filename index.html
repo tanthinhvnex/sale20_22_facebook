@@ -526,94 +526,104 @@
             return null;
         }
 
+        // Fetch với timeout
+        async function fetchWithTimeout(url, options = {}, timeout = 8000) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+                return response;
+            } catch (error) {
+                clearTimeout(timeoutId);
+                throw error;
+            }
+        }
+
+        // Extract URL từ HTML response
+        function extractUrlFromHtml(html) {
+            // Method 1: Tìm og:url meta tag
+            const ogUrlMatch = html.match(/property=["']og:url["']\s+content=["']([^"']+)["']/i) ||
+                              html.match(/content=["']([^"']+)["']\s+property=["']og:url["']/i);
+            if (ogUrlMatch && ogUrlMatch[1].includes('shopee.vn')) {
+                return ogUrlMatch[1];
+            }
+
+            // Method 2: Tìm canonical link
+            const canonicalMatch = html.match(/rel=["']canonical["']\s+href=["']([^"']+)["']/i) ||
+                                  html.match(/href=["']([^"']+)["']\s+rel=["']canonical["']/i);
+            if (canonicalMatch && canonicalMatch[1].includes('shopee.vn')) {
+                return canonicalMatch[1];
+            }
+
+            // Method 3: Tìm product URL trực tiếp trong HTML
+            const productUrlMatch = html.match(/https?:\/\/shopee\.vn\/[^\s"'<>]*-i\.\d+\.\d+/i) ||
+                                   html.match(/https?:\/\/shopee\.vn\/product\/\d+\/\d+/i);
+            if (productUrlMatch) {
+                return productUrlMatch[0];
+            }
+
+            // Method 4: Extract IDs từ HTML và build URL
+            const ids = extractProductIdsFromHtml(html);
+            if (ids) {
+                return `https://shopee.vn/product/${ids.shopId}/${ids.itemId}`;
+            }
+
+            return null;
+        }
+
         // Resolve short link bằng CORS proxy
         async function resolveShortLink(shortUrl) {
-            // Danh sách CORS proxies
+            // Thử các proxy song song để nhanh hơn
             const proxies = [
-                {
-                    url: `https://api.allorigins.win/get?url=${encodeURIComponent(shortUrl)}`,
-                    type: 'json'
-                },
-                {
-                    url: `https://api.allorigins.win/raw?url=${encodeURIComponent(shortUrl)}`,
-                    type: 'raw'
-                },
-                {
-                    url: `https://corsproxy.io/?${encodeURIComponent(shortUrl)}`,
-                    type: 'raw'
-                },
-                {
-                    url: `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(shortUrl)}`,
-                    type: 'raw'
-                }
+                `https://api.allorigins.win/get?url=${encodeURIComponent(shortUrl)}`,
+                `https://corsproxy.io/?${encodeURIComponent(shortUrl)}`,
             ];
 
-            for (const proxy of proxies) {
+            // Tạo array các promises
+            const fetchPromises = proxies.map(async (proxyUrl) => {
                 try {
-                    console.log('Trying proxy:', proxy.url);
-                    const response = await fetch(proxy.url, {
+                    console.log('Trying proxy:', proxyUrl);
+                    const response = await fetchWithTimeout(proxyUrl, {
                         method: 'GET',
                         redirect: 'follow'
-                    });
+                    }, 10000);
 
                     let html = '';
-                    if (proxy.type === 'json') {
+                    if (proxyUrl.includes('allorigins.win/get')) {
                         const data = await response.json();
                         html = data.contents || '';
                     } else {
                         html = await response.text();
                     }
 
-                    if (!html) continue;
+                    if (!html) return null;
 
-                    // Method 1: Tìm og:url meta tag
-                    const ogUrlMatch = html.match(/property="og:url"\s+content="([^"]+)"/i) ||
-                                      html.match(/content="([^"]+)"\s+property="og:url"/i);
-                    if (ogUrlMatch && ogUrlMatch[1].includes('shopee.vn')) {
-                        console.log('Found og:url:', ogUrlMatch[1]);
-                        return ogUrlMatch[1];
+                    const foundUrl = extractUrlFromHtml(html);
+                    if (foundUrl) {
+                        console.log('Found URL:', foundUrl);
+                        return foundUrl;
                     }
-
-                    // Method 2: Tìm canonical link
-                    const canonicalMatch = html.match(/rel="canonical"\s+href="([^"]+)"/i) ||
-                                          html.match(/href="([^"]+)"\s+rel="canonical"/i);
-                    if (canonicalMatch && canonicalMatch[1].includes('shopee.vn')) {
-                        console.log('Found canonical:', canonicalMatch[1]);
-                        return canonicalMatch[1];
-                    }
-
-                    // Method 3: Tìm redirect URL trong JavaScript
-                    const redirectMatch = html.match(/window\.location\s*=\s*["']([^"']+shopee\.vn[^"']+)["']/i) ||
-                                         html.match(/location\.href\s*=\s*["']([^"']+shopee\.vn[^"']+)["']/i) ||
-                                         html.match(/redirect.*?["'](https?:\/\/[^"']*shopee\.vn[^"']+)["']/i);
-                    if (redirectMatch) {
-                        console.log('Found redirect:', redirectMatch[1]);
-                        return redirectMatch[1];
-                    }
-
-                    // Method 4: Tìm product URL trực tiếp
-                    const productUrlMatch = html.match(/https?:\/\/shopee\.vn\/[^\s"'<>]*-i\.\d+\.\d+[^\s"'<>]*/i) ||
-                                           html.match(/https?:\/\/shopee\.vn\/product\/\d+\/\d+[^\s"'<>]*/i);
-                    if (productUrlMatch) {
-                        console.log('Found product URL:', productUrlMatch[0]);
-                        return productUrlMatch[0].split(/[?#]/)[0]; // Remove query params
-                    }
-
-                    // Method 5: Extract IDs từ HTML và build URL
-                    const ids = extractProductIdsFromHtml(html);
-                    if (ids) {
-                        const builtUrl = `https://shopee.vn/product/${ids.shopId}/${ids.itemId}`;
-                        console.log('Built URL from IDs:', builtUrl);
-                        return builtUrl;
-                    }
-
+                    return null;
                 } catch (error) {
-                    console.log('Proxy failed:', proxy.url, error.message);
-                    continue;
+                    console.log('Proxy failed:', proxyUrl, error.message);
+                    return null;
                 }
+            });
+
+            // Race để lấy kết quả đầu tiên thành công
+            const results = await Promise.all(fetchPromises);
+            const validResult = results.find(r => r !== null);
+
+            if (validResult) {
+                return validResult;
             }
 
-            throw new Error('Không thể xử lý short link. Vui lòng mở link trong trình duyệt, đợi trang load xong, rồi copy link từ thanh địa chỉ.');
+            throw new Error('Không thể xử lý short link. Vui lòng mở link trong trình duyệt, đợi trang load xong, rồi copy link đầy đủ từ thanh địa chỉ.');
         }
 
         // Main function: Xử lý URL và tạo affiliate link
