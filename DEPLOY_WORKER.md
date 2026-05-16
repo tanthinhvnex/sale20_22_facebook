@@ -1,88 +1,119 @@
-# Hướng dẫn Deploy Cloudflare Worker
+# Hướng dẫn Deploy Cloudflare Worker qua GitHub
 
-## Cách 1: Dùng Cloudflare Dashboard (Dễ nhất)
+## Bước 1: Tạo tài khoản Cloudflare
 
-### Bước 1: Tạo tài khoản Cloudflare
 1. Truy cập https://dash.cloudflare.com/sign-up
 2. Đăng ký tài khoản miễn phí
 
-### Bước 2: Tạo Worker
-1. Vào Dashboard > **Workers & Pages**
-2. Click **Create Application**
-3. Chọn **Create Worker**
-4. Đặt tên: `shopee-link-resolver`
-5. Click **Deploy**
+---
 
-### Bước 3: Dán code
-1. Sau khi deploy, click **Edit code**
-2. Xóa code mẫu
-3. Copy toàn bộ nội dung file `worker.js` và dán vào
-4. Click **Save and deploy**
+## Bước 2: Lấy Account ID
 
-### Bước 4: Lấy URL
-- URL Worker sẽ có dạng: `https://shopee-link-resolver.<your-subdomain>.workers.dev`
-- Ví dụ: `https://shopee-link-resolver.abc123.workers.dev`
+1. Đăng nhập Cloudflare Dashboard
+2. Vào **Workers & Pages** (menu bên trái)
+3. Ở góc phải, bạn sẽ thấy **Account ID** - copy giá trị này
 
-### Bước 5: Cập nhật Frontend
-Mở file `index.html`, tìm dòng:
-```javascript
-const CONFIG = {
-    affiliateId: "17352620178",
-    subId: "product-fb"
-};
+---
+
+## Bước 3: Tạo API Token
+
+1. Vào **My Profile** (góc trên phải) → **API Tokens**
+2. Click **Create Token**
+3. Chọn template **Edit Cloudflare Workers**
+4. Click **Continue to summary** → **Create Token**
+5. **Copy token** ngay lập tức (chỉ hiển thị 1 lần!)
+
+---
+
+## Bước 4: Thêm Secrets vào GitHub
+
+1. Vào repo GitHub: https://github.com/tanthinhvnex/shopee-affiliate
+2. Vào **Settings** → **Secrets and variables** → **Actions**
+3. Click **New repository secret** và thêm 2 secrets:
+
+| Name | Value |
+|------|-------|
+| `CLOUDFLARE_ACCOUNT_ID` | Account ID từ bước 2 |
+| `CLOUDFLARE_API_TOKEN` | API Token từ bước 3 |
+
+---
+
+## Bước 5: Trigger Deploy
+
+### Cách 1: Push code
+```bash
+git add .
+git commit -m "Deploy worker"
+git push
 ```
 
-Thêm dòng `workerUrl`:
+### Cách 2: Chạy thủ công
+1. Vào repo GitHub → **Actions**
+2. Chọn workflow **Deploy Cloudflare Worker**
+3. Click **Run workflow**
+
+---
+
+## Bước 6: Lấy URL Worker
+
+Sau khi deploy thành công:
+
+1. Vào Cloudflare Dashboard → **Workers & Pages**
+2. Click vào worker **shopee-link-resolver**
+3. URL sẽ có dạng: `https://shopee-link-resolver.<account>.workers.dev`
+
+---
+
+## Bước 7: Cập nhật Frontend
+
+Mở file `index.html`, sửa CONFIG:
+
 ```javascript
 const CONFIG = {
     affiliateId: "17352620178",
     subId: "product-fb",
-    workerUrl: "https://shopee-link-resolver.<your-subdomain>.workers.dev"
+    workerUrl: "https://shopee-link-resolver.<account>.workers.dev"
 };
 ```
 
----
-
-## Cách 2: Dùng Wrangler CLI (Cho dev)
-
-### Cài đặt Wrangler
+Commit và push:
 ```bash
-npm install -g wrangler
-```
-
-### Đăng nhập
-```bash
-wrangler login
-```
-
-### Deploy
-```bash
-cd /path/to/project
-wrangler deploy
+git add index.html
+git commit -m "Add Worker URL"
+git push
 ```
 
 ---
 
 ## Test Worker
 
-Sau khi deploy, test bằng cách truy cập:
+Truy cập URL sau để test:
 ```
-https://shopee-link-resolver.<your-subdomain>.workers.dev?url=https://vn.shp.ee/xKJarNWo
+https://shopee-link-resolver.<account>.workers.dev?url=https://vn.shp.ee/xKJarNWo
 ```
 
 Kết quả mong đợi:
 ```json
 {
-    "success": true,
-    "canonicalUrl": "https://shopee.vn/product/118938080/23087700521",
-    "shopId": "118938080",
-    "itemId": "23087700521"
+  "success": true,
+  "canonicalUrl": "https://shopee.vn/product/118938080/23087700521",
+  "shopId": "118938080",
+  "itemId": "23087700521"
 }
 ```
 
 ---
 
-## Free Tier Limits
+## Troubleshooting
 
-- 100,000 requests/ngày (miễn phí)
-- Quá đủ cho sử dụng cá nhân
+### Lỗi "Authentication error"
+- Kiểm tra lại API Token đã đúng chưa
+- Đảm bảo token có quyền "Edit Cloudflare Workers"
+
+### Lỗi "Account not found"
+- Kiểm tra Account ID đã đúng chưa
+- Account ID là chuỗi 32 ký tự hex
+
+### Worker không hoạt động
+- Kiểm tra GitHub Actions có chạy thành công không
+- Xem logs trong tab Actions của repo
