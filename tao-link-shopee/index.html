@@ -576,20 +576,11 @@
         function buildAffiliateUrl(canonicalUrl, platform = 'facebook') {
             const subId = CONFIG.platforms[platform].subId;
 
-            if (platform === 'instagram') {
-                // Instagram: Dùng Worker để redirect với đầy đủ params (trigger app mở)
-                const params = new URLSearchParams({
-                    go: canonicalUrl,
-                    aff_type: 'instagram',
-                    aff_id: CONFIG.affiliateId,
-                    sub_id: subId
-                });
-                return `${CONFIG.workerUrl}?${params.toString()}`;
-            } else {
-                // Facebook: Dùng s.shopee.vn/an_redir
-                const encodedUrl = encodeURIComponent(canonicalUrl);
-                return `https://s.shopee.vn/an_redir?origin_link=${encodedUrl}&affiliate_id=${CONFIG.affiliateId}&sub_id=${subId}`;
-            }
+            // Cả Facebook và Instagram đều dùng trực tiếp s.shopee.vn/an_redir
+            // (route App Link chính thức của Shopee) để app mở thẳng vào sản phẩm,
+            // không qua domain trung gian nào cả.
+            const encodedUrl = encodeURIComponent(canonicalUrl);
+            return `https://s.shopee.vn/an_redir?origin_link=${encodedUrl}&affiliate_id=${CONFIG.affiliateId}&sub_id=${subId}`;
         }
 
         // Extract product IDs từ HTML response
