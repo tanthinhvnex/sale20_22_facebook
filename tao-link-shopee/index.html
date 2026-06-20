@@ -863,10 +863,17 @@
                 'Bấm để copy và paste vào bài viết' :
                 'Bấm để copy và chia sẻ';
 
+            const openLinkBtn = platform === 'instagram' ? `
+                <a href="${affiliateLink}" target="_blank" rel="noopener" class="btn btn-instagram btn-custom" style="display: block; width: 100%; text-align: center; margin-top: 0.5rem;">
+                    <i class="fas fa-arrow-up-right-from-square mr-1"></i>Mở link (thử mở app Shopee)
+                </a>
+            ` : '';
+
             $('#affiliate-links-container').html(`
                 <button class="btn-copy-main copy-btn" data-link="${affiliateLink}">
                     ${icon} ${config.copyText}<br>${actionText}
                 </button>
+                ${openLinkBtn}
             `);
             $('#result-section').addClass('show');
 
